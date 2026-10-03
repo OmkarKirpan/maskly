@@ -112,6 +112,18 @@ Campus Wi-Fi and small laptops don't always cooperate, so Maskly can fall back t
 - The page tells you when the cloud was used.
 - ⚠️ The Gemini API free tier may keep and review inputs. **Use fake data only** with the fallback.
 
+## Use it from an AI agent
+
+Maskly ships as an [Agent Skill](https://agentskills.io) in [`skills/redact-screenshot/`](skills/redact-screenshot/SKILL.md), so coding and support agents redact a screenshot **before** they attach or upload it.
+
+```bash
+cp -r skills/redact-screenshot ~/.claude/skills/      # or your agent's skills folder
+```
+
+The agent runs `uv run scripts/redact.py shot.png` and gets back `shot_redacted.png` plus a JSON report with **counts only, never the redacted text**, so personal data stays out of the agent's context too. Cloud fallback is off unless `--allow-cloud` is passed, and a partial scan exits with code `2` so the agent asks you to check before sharing. Validated with `skills-ref validate`.
+
+The same pipeline is a CLI: `uv run maskly shot.png`.
+
 ## Evaluate it yourself
 
 ```bash
@@ -123,7 +135,8 @@ uv run python maskly.py         # rules self-check
 ## Project layout
 
 ```
-maskly.py          OCR, rules, Gemma (local + cloud), detect()
+maskly.py          OCR, rules, Gemma (local + cloud), detect(), redact(), `maskly` CLI
+skills/            Agent Skill: redact-screenshot
 app.py             FastAPI server: GET / and POST /detect
 static/index.html  Review page: paste, review, copy (no build step)
 static/tokens.css  Design tokens; fonts are bundled in static/fonts so it works offline

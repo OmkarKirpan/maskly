@@ -222,6 +222,57 @@ def detect(img, use_gemma=True):
                                         "gemma": round((time.perf_counter() - t_ocr) * 1000)}}
 
 
+def redact(img, boxes):
+    """Solid black fill over every box; same padding as the web UI (4 px, or 20% of text height)."""
+    out = img.convert("RGB")  # fresh pixels, no EXIF carried into the PNG
+    d = ImageDraw.Draw(out)
+    for b in boxes:
+        x0, y0, x1, y1 = b["box"]
+        p = max(4, (y1 - y0) * 0.2)
+        d.rectangle([x0 - p, y0 - p, x1 + p, y1 + p], fill="black")
+    return out
+
+
+def cli(argv=None):
+    """`maskly in.png` -> in_redacted.png + a JSON report with counts only (never the redacted text).
+    Exit 0 = full scan, 2 = partial scan (rules only; a human must check), 1 = error."""
+    import argparse
+    from collections import Counter
+    from pathlib import Path
+
+    from PIL import Image
+
+    global GEMINI_KEY
+    ap = argparse.ArgumentParser(prog="maskly", description="Black out personal data in a screenshot, on this machine.")
+    ap.add_argument("image", help="PNG or JPG to redact")
+    ap.add_argument("-o", "--output", help="output PNG (default: <name>_redacted.png next to the input)")
+    ap.add_argument("--rules-only", action="store_true", help="skip Gemma; pattern rules only (fast, misses names/addresses)")
+    ap.add_argument("--allow-cloud", action="store_true",
+                    help="allow the Gemini API fallback when local Ollama fails (free tier: fake data only)")
+    a = ap.parse_args(argv)
+    if not a.allow_cloud:
+        GEMINI_KEY = ""  # safe default for agents: nothing leaves the machine
+    src = Path(a.image)
+    out = Path(a.output) if a.output else src.with_name(f"{src.stem}_redacted.png")
+    try:
+        if out.resolve() == src.resolve():
+            raise ValueError("output would overwrite the input")
+        img = Image.open(src).convert("RGB")
+    except Exception as e:
+        print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}))
+        return 1
+    r = detect(img, use_gemma=not a.rules_only)
+    redact(img, r["boxes"]).save(out, "PNG")
+    partial = r["partial"] or a.rules_only
+    print(json.dumps({
+        "ok": True, "output": str(out), "boxes": len(r["boxes"]),
+        "boxes_by_category": dict(Counter(b["category"] for b in r["boxes"])),
+        "gemma": r["backend"], "partial": partial,
+        "warning": "Partial scan: only pattern rules ran. Names, addresses and IDs may be visible. "
+                   "Ask the user to check the image before sharing." if partial else None}, indent=1))
+    return 2 if partial else 0
+
+
 if __name__ == "__main__":  # self-check for the rules engine
     assert luhn("4111111111111111") and not luhn("4111111111111112")
     a = "23456789012"
@@ -237,3 +288,7 @@ if __name__ == "__main__":  # self-check for the rules engine
     for t in ["Mail", "card", "ok", "PAN"]:
         assert t not in got, (t, got)
     print("rules ok:", got)
+    from PIL import Image
+    red = redact(Image.new("RGB", (100, 40), "white"), [{"box": [20, 10, 60, 30]}])
+    assert red.getpixel((40, 20)) == (0, 0, 0) and red.getpixel((95, 5)) == (255, 255, 255)
+    print("redact ok")

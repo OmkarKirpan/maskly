@@ -16,3 +16,13 @@ dependencies = [
 dev = [
     "faker>=40.40.0",
 ]
+
+[project.scripts]
+maskly = "maskly:cli"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["maskly"]
