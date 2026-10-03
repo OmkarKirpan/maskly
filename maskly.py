@@ -11,8 +11,10 @@ from PIL import ImageDraw
 
 MODEL = os.environ.get("MASKLY_MODEL", "gemma4:e2b")
 OLLAMA = os.environ.get("MASKLY_OLLAMA", "http://localhost:11434")
-# ponytail: PRD says 10 s; an 8 GB M1 needs longer on the first call. Tune per machine.
-TIMEOUT = float(os.environ.get("MASKLY_TIMEOUT", "30"))
+# PRD says 10 s, but local Gemma 4 thinks first: E2B on a GTX 1650 takes 35-57 s per screenshot.
+TIMEOUT = float(os.environ.get("MASKLY_TIMEOUT", "90"))
+# Thinking off is 2-3x faster but misses more (eval: recall 100% -> 93%, precision 69% -> ~47%).
+THINK = os.environ.get("MASKLY_THINK", "1") != "0"
 THRESHOLD = float(os.environ.get("MASKLY_THRESHOLD", "0.6"))
 # Cloud fallback, used only when local Ollama fails. Free-tier Gemini API: fake data only.
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -151,7 +153,7 @@ def _png_b64(img):
 
 def _ask_local(prompt, img):
     r = httpx.post(f"{OLLAMA}/api/chat", timeout=TIMEOUT, json={
-        "model": MODEL, "stream": False, "format": SCHEMA, "keep_alive": "30m", "options": {"temperature": 0},
+        "model": MODEL, "stream": False, "format": SCHEMA, "keep_alive": "30m", "think": THINK, "options": {"temperature": 0},
         "messages": [{"role": "user", "images": [_png_b64(img)], "content": prompt}]})
     r.raise_for_status()
     return r.json()["message"]["content"]
