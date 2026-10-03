@@ -1,7 +1,5 @@
 # Redact Before Send — PRD
 
-Oct 3, 2026 · @Sanskruti Kirpan
-
 ## Overview
 
 Redact Before Send is an offline desktop tool that blacks out personal data in screenshots before a support agent shares them. It runs Gemma 4 E4B on the agent's own laptop, so customer data never leaves the device.
