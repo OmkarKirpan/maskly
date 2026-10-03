@@ -1,0 +1,42 @@
+[
+ {
+  "text": "pay-db-2.prod.internal",
+  "category": "internal_url",
+  "box": [
+   420,
+   247,
+   655,
+   270
+  ]
+ },
+ {
+  "text": "221.174.214.15",
+  "category": "ip_address",
+  "box": [
+   420,
+   305,
+   587,
+   323
+  ]
+ },
+ {
+  "text": "udyati97@example.com",
+  "category": "email",
+  "box": [
+   420,
+   363,
+   678,
+   386
+  ]
+ },
+ {
+  "text": "ghp_t37tBcDB92lqCathec0fkq4dsx524lrp58gh",
+  "category": "secret",
+  "box": [
+   420,
+   421,
+   912,
+   444
+  ]
+ }
+]

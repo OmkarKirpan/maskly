@@ -1,0 +1,62 @@
+[
+ {
+  "text": "Matthew Rana",
+  "category": "person_name",
+  "box": [
+   420,
+   189,
+   575,
+   207
+  ]
+ },
+ {
+  "text": "boragirindra@example.com",
+  "category": "email",
+  "box": [
+   420,
+   247,
+   715,
+   270
+  ]
+ },
+ {
+  "text": "+91 16613 08246",
+  "category": "phone",
+  "box": [
+   420,
+   305,
+   607,
+   323
+  ]
+ },
+ {
+  "text": "ORD-258176",
+  "category": "customer_or_order_id",
+  "box": [
+   420,
+   363,
+   561,
+   381
+  ]
+ },
+ {
+  "text": "4075 6457 4932 1703",
+  "category": "card",
+  "box": [
+   420,
+   421,
+   654,
+   439
+  ]
+ },
+ {
+  "text": "19/48, Chauhan Street, Serampore",
+  "category": "postal_address",
+  "box": [
+   420,
+   479,
+   794,
+   502
+  ]
+ }
+]

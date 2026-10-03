@@ -1,0 +1,18 @@
+[project]
+name = "maskly"
+version = "0.1.0"
+description = "Offline screenshot redaction with Gemma 4"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.142.2",
+    "httpx>=0.28.1",
+    "onnxruntime>=1.30.0",
+    "pillow>=12.3.0",
+    "rapidocr>=3.9.2",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "faker>=40.40.0",
+]

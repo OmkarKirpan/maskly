@@ -1,0 +1,52 @@
+[
+ {
+  "text": "Dev Bhasin",
+  "category": "person_name",
+  "box": [
+   420,
+   131,
+   543,
+   149
+  ]
+ },
+ {
+  "text": "9872 9147 1409",
+  "category": "aadhaar",
+  "box": [
+   420,
+   189,
+   593,
+   207
+  ]
+ },
+ {
+  "text": "RTOWI6737K",
+  "category": "pan",
+  "box": [
+   420,
+   247,
+   569,
+   265
+  ]
+ },
+ {
+  "text": "HDFC0620801",
+  "category": "bank_details",
+  "box": [
+   420,
+   305,
+   580,
+   323
+  ]
+ },
+ {
+  "text": "978663959323",
+  "category": "bank_details",
+  "box": [
+   420,
+   363,
+   580,
+   381
+  ]
+ }
+]
