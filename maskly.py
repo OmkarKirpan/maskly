@@ -85,7 +85,22 @@ def _digits(s):
     return re.sub(r"\D", "", s)
 
 
-RULES = [  # (category, regex, optional check on the matched text)
+def aba(digits):
+    """US bank routing number checksum (3-7-1 weights)."""
+    d = [int(c) for c in digits]
+    return len(d) == 9 and (3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + d[2] + d[5] + d[8]) % 10 == 0
+
+
+def iban(s):
+    """ISO 13616 mod-97 check."""
+    s = re.sub(r"\s", "", s)
+    if not 15 <= len(s) <= 34:
+        return False
+    return int("".join(str(int(c, 36)) for c in s[4:] + s[:4])) % 97 == 1
+
+
+RULES = [  # (category, regex, optional check on the matched text, optional regex the line or its row label must match)
+    # A regex with a group named "v" redacts only that group (the value after "password=", not the key).
     ("email", r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", None),
     ("card", r"\b(?:\d[ -]?){12,18}\d\b", lambda m: 13 <= len(_digits(m)) <= 19 and luhn(_digits(m))),
     ("aadhaar", r"\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b", lambda m: verhoeff(_digits(m))),
@@ -100,25 +115,52 @@ RULES = [  # (category, regex, optional check on the matched text)
     ("ip_address", r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b", None),
     ("ip_address", r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|\b(?:[0-9a-fA-F]{1,4}:){2,6}:[0-9a-fA-F:]*", None),
     ("internal_url", r"\b[\w-]+(?:\.[\w-]+)*\.(?:internal|local|corp|lan|intranet)\b", None),
+    ("national_id", r"\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b", None),  # US SSN
+    ("bank_details", r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b", iban),
+    ("mac_address", r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b", None),
+    ("secret", r"(?i)\b(?:password|passwd|pwd|api[_-]?key|secret|token)\s*[:=]\s*(?P<v>\S+)", None),
+    ("secret", r"\bBearer\s+(?P<v>[\w.~+/-]{16,}=*)", None),
+    ("secret", r"(?i)\b(?:set-)?cookie\s*:\s*(?P<v>[\w.-]+=[^\s;]+(?:;\s*[\w.-]+=[^\s;]+)*)", None),
+    # Too common on their own: only near a label that names them.
+    ("bank_details", r"\b\d{9}\b", aba, r"(?i)routing|\baba\b|\brtn\b"),
+    ("bank_details", r"\b[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b", None, r"(?i)swift|\bbic\b"),
 ]
+
+
+def row_left(words, lines, n):
+    """Index of the nearest line to the left on the same row, or None. OCR reads a "Customer" label
+    and its value as two separate lines; this pairs them back up."""
+    x0, y0, _, y1 = words[lines[n][0]]["box"]
+    best = None
+    for m, ids in enumerate(lines):
+        bx1, by0, by1 = words[ids[-1]]["box"][2], words[ids[0]]["box"][1], words[ids[0]]["box"][3]
+        if m != n and bx1 <= x0 and min(y1, by1) - max(y0, by0) > 0.5 * (y1 - y0) and (best is None or bx1 > best[0]):
+            best = (bx1, m)
+    return best[1] if best else None
 
 
 def rules(words, lines):
     """Run regexes on full line text (catches numbers split by spaces), map hits back to word ids."""
     hits = {}
-    for ids in lines:
+    texts = [" ".join(words[i]["text"] for i in ids) for ids in lines]
+    for n, ids in enumerate(lines):
         text, spans = "", []
         for i in ids:
             if text:
                 text += " "
             spans.append((len(text), len(text) + len(words[i]["text"]), i))
             text += words[i]["text"]
-        for cat, rx, check in RULES:
+        left = row_left(words, lines, n)
+        context = text + " " + (texts[left] if left is not None else "")
+        for cat, rx, check, *near in RULES:
+            if near and not re.search(near[0], context):
+                continue
             for m in re.finditer(rx, text):
                 if check and not check(m.group()):
                     continue
+                a, b = m.span("v") if "v" in m.re.groupindex else m.span()
                 for s, e, i in spans:
-                    if s < m.end() and m.start() < e:
+                    if s < b and a < e:
                         hits.setdefault(i, cat)
     return hits
 
@@ -289,6 +331,22 @@ if __name__ == "__main__":  # self-check for the rules engine
         assert t in got, (t, got)
     for t in ["Mail", "card", "ok", "PAN"]:
         assert t not in got, (t, got)
+    assert aba("011000015") and not aba("011000016") and iban("GB82 WEST 1234 5698 7654 32") and not iban("GB82 WEST 1234 5698 7654 33")
+    line = "ssn 123-45-6789 bad 000-12-3456 iban GB82 WEST 1234 5698 7654 32 mac 00:39:F4:1E:5A:7B " \
+           "password: hunter2 auth Bearer abcdefghijklmnop1234 plain 011000015 DEUTDEFF Cookie: sid=a8f3k2; theme=dark"
+    ws = [{"id": i, "text": t, "box": [0, 0, 1, 1]} for i, t in enumerate(line.split())]
+    got = {ws[i]["text"]: c for i, c in rules(ws, [[w["id"] for w in ws]]).items()}
+    for t in ["123-45-6789", "GB82", "32", "00:39:F4:1E:5A:7B", "hunter2", "abcdefghijklmnop1234", "sid=a8f3k2;"]:
+        assert t in got, (t, got)
+    for t in ["000-12-3456", "password:", "Bearer", "011000015", "DEUTDEFF", "ssn", "Cookie:"]:
+        assert t not in got, (t, got)
+    prose = "Cookie: These cookies are essential".split()
+    assert not rules([{"id": i, "text": t, "box": [0, 0, 1, 1]} for i, t in enumerate(prose)], [list(range(len(prose)))])
+    # Routing and SWIFT need a label: on the same line or as the row label OCR read as its own line.
+    ws = [{"id": 0, "text": "Routing", "box": [0, 0, 50, 10]}, {"id": 1, "text": "011000015", "box": [100, 0, 150, 10]},
+          {"id": 2, "text": "SWIFT:", "box": [0, 20, 50, 30]}, {"id": 3, "text": "DEUTDEFF", "box": [100, 20, 150, 30]}]
+    got = {ws[i]["text"] for i in rules(ws, [[0], [1], [2], [3]])}
+    assert got == {"011000015", "DEUTDEFF"}, got
     print("rules ok:", got)
     from PIL import Image
     red = redact(Image.new("RGB", (100, 40), "white"), [{"box": [20, 10, 60, 30]}])
