@@ -374,12 +374,19 @@ if (DEMO) {
 $('#openBtn').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#file').click(); } };
 $('#file').onchange = e => { load(e.target.files[0]); e.target.value = ''; };
 document.onpaste = e => { const f = [...e.clipboardData.files][0]; if (f) load(f); };
+// Desktop shell hotkey (desktop.py). Clipboard bytes cross the pywebview bridge, never HTTP.
+window.scanClipboard = async () => {
+  const b64 = await window.pywebview.api.clipboard_png();
+  if (!b64) return say('No image on the clipboard.');
+  load(new File([await (await fetch('data:image/png;base64,' + b64)).blob()], 'clipboard.png', { type: 'image/png' }));
+};
 document.ondragover = e => { e.preventDefault(); $('#drop').classList.add('is-over'); };
 document.ondragleave = e => { if (!e.relatedTarget) $('#drop').classList.remove('is-over'); };
 document.ondrop = e => { e.preventDefault(); $('#drop').classList.remove('is-over'); load(e.dataTransfer.files[0]); };
 document.onkeydown = e => {
   if (e.target.matches?.('input')) return;
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) copy();
+  const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || plain && !e.target.matches?.('button, textarea, label'))) copy();
   else if (e.key.toLowerCase() === 'p' && !e.metaKey && !e.ctrlKey) togglePreview();
 };
 </script>
