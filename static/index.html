@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Maskly — Redact Before Send</title>
-<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="static/tokens.css">
 <style>
 /* Hallmark · genre: modern-minimal · macrostructure: Workbench (app shell) · theme: Cobalt · tone: utilitarian
  * enrichment: none (the screenshot is the content) · nav: bordered tool bar · footer: none (app page)
@@ -77,6 +77,12 @@ kbd { font: 500 var(--text-2xs)/1 var(--font-mono); padding: var(--space-3xs); b
 .steps li::before { content: counter(list-item) " "; color: var(--color-accent); }
 .drop .btn { background: var(--color-graphite-2); border-color: var(--color-graphite-2); color: var(--color-on-graphite); }
 .drop .btn:hover { border-color: var(--color-on-graphite-2); }
+.demo { margin-top: var(--space-lg); padding-top: var(--space-md); border-top: var(--rule-1) solid var(--color-graphite-2); }
+.demo[hidden] { display: none; }
+.demo p { margin: 0 0 var(--space-sm); }
+.demo a { color: var(--color-on-graphite); text-underline-offset: 2px; }
+.demo a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.samples { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
 
 /* ── Findings panel ───────────────────────────────────── */
 .panel { border-left: var(--rule-1) solid var(--color-rule); display: flex; flex-direction: column; min-height: 0; background: var(--color-paper); }
@@ -153,6 +159,14 @@ kbd { font: 500 var(--text-2xs)/1 var(--font-mono); padding: var(--space-3xs); b
       <ol class="steps mono"><li>Paste</li><li>Review</li><li>Copy</li></ol>
       <button class="btn" id="dropOpen" type="button">Choose an image</button>
       <span class="mono">&nbsp; or press <kbd>⌘</kbd> <kbd>V</kbd></span>
+      <div class="demo" id="demo" hidden>
+        <p><strong>Live demo with saved results.</strong> Scanning needs the local app (Python + Gemma), so these samples load findings saved from a real run. <a href="https://github.com/OmkarKirpan/maskly">Run it yourself</a>.</p>
+        <div class="samples">
+          <button class="btn" type="button" data-sample="dashboard">Support ticket</button>
+          <button class="btn" type="button" data-sample="kyc">KYC review</button>
+          <button class="btn" type="button" data-sample="errorlog">Error log</button>
+        </div>
+      </div>
     </div>
     <canvas id="c" hidden aria-label="Screenshot with redaction boxes. Drag to add a box."></canvas>
   </section>
@@ -187,6 +201,8 @@ const $ = s => document.querySelector(s);
 const c = $('#c'), ctx = c.getContext('2d'), PAD = 4;
 const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const alpha = (col, a) => col.replace(/\)$/, ` / ${a})`);
+// Demo mode (GitHub Pages or ?demo): no backend, samples load saved /detect results.
+const DEMO = location.hostname.endsWith('github.io') || new URLSearchParams(location.search).has('demo');
 let img = null, name = 'screenshot', boxes = [], groups = [], partial = false, preview = false, drag = null, hot = -1;
 
 // ── load + scan ────────────────────────────────────────
@@ -203,20 +219,21 @@ async function load(blob) {
   const t = performance.now();
   let backend = 'failed';
   try {
-    const r = await fetch('/detect', { method: 'POST', body: blob });
+    const r = DEMO ? await demoDetect(blob) : await fetch('/detect', { method: 'POST', body: blob });
     if (!r.ok) throw new Error(await r.text());
     const d = await r.json();
     boxes = d.boxes.map(b => ({ ...b, on: true }));
     partial = d.partial; backend = d.backend;
     $('#err').textContent = d.error || '';
-    $('#meta').textContent = `${d.words} words · ${((performance.now() - t) / 1000).toFixed(1)} s · Gemma ${backend}`;
+    const secs = DEMO ? (d.ms.ocr_rules + d.ms.gemma) / 1000 : (performance.now() - t) / 1000;  // demo: time of the saved real run
+    $('#meta').textContent = `${d.words} words · ${secs.toFixed(1)} s${DEMO ? ' (saved run)' : ''} · Gemma ${backend}`;
   } catch (e) {
     partial = true; $('#err').textContent = String(e).slice(0, 200);
     $('#meta').textContent = 'Scan failed · draw boxes by hand';
   }
   $('#scan').hidden = true;
   $('#chip').dataset.backend = backend;
-  $('#chip').textContent = backend === 'cloud' ? 'Cloud fallback' : backend === 'failed' ? 'Rules only' : 'On this device';
+  $('#chip').textContent = DEMO ? 'Demo · saved results' : backend === 'cloud' ? 'Cloud fallback' : backend === 'failed' ? 'Rules only' : 'On this device';
   $('#partial').hidden = !partial; $('#cloud').hidden = backend !== 'cloud'; $('#ack').checked = false;
   regroup(); setReady(true); draw();
   say(`${groups.length} findings. Review, then copy.`);
@@ -342,6 +359,17 @@ const say = m => { $('#live').textContent = m; };
 
 $('#copy').onclick = copy; $('#save').onclick = save; $('#preview').onclick = togglePreview;
 $('#dropOpen').onclick = () => $('#file').click();
+async function demoDetect(blob) {
+  if (!blob.sample) throw new Error('Demo site: scanning your own image needs the local app. Draw boxes by hand.');
+  return fetch(`demo/${blob.sample}.json`);
+}
+if (DEMO) {
+  $('#demo').hidden = false; $('#chip').textContent = 'Demo';
+  document.querySelectorAll('[data-sample]').forEach(b => b.onclick = async () => {
+    const f = new File([await (await fetch(`demo/${b.dataset.sample}.png`)).blob()], b.dataset.sample + '.png', { type: 'image/png' });
+    f.sample = b.dataset.sample; load(f);
+  });
+}
 $('#openBtn').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#file').click(); } };
 $('#file').onchange = e => { load(e.target.files[0]); e.target.value = ''; };
 document.onpaste = e => { const f = [...e.clipboardData.files][0]; if (f) load(f); };

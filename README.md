@@ -10,6 +10,8 @@ Paste a customer screenshot and get a safe copy back in a few seconds. Emails, c
 ![Gemma 4](https://img.shields.io/badge/model-Gemma%204-7b2cbf)
 ![Runs offline](https://img.shields.io/badge/runs-offline-black)
 
+**[▶ Try the live demo](https://omkarkirpan.github.io/maskly/)** · saved results from a real run (scanning your own images needs the local app)
+
 <img src="docs/before-after.png" alt="A support ticket screenshot before and after Maskly: name, email, phone, order ID, card and address are covered by solid black boxes" width="100%">
 
 </div>
@@ -127,6 +129,7 @@ static/index.html  Review page: paste, review, copy (no build step)
 static/tokens.css  Design tokens; fonts are bundled in static/fonts so it works offline
 samples.py         Fake screenshots with labelled sensitive items
 eval.py            Recall / precision, rules only vs rules + Gemma
+make_demo.py       Saves real results for the GitHub Pages demo (demo/)
 ```
 
 ## Roadmap
