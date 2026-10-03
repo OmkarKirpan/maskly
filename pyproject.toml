@@ -21,10 +21,16 @@ dev = [
 
 [project.scripts]
 maskly = "maskly:cli"
+maskly-desktop = "desktop:main"
+
+[project.optional-dependencies]
+desktop = [
+    "pywebview>=6.2.1",
+]
 
 [build-system]
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["maskly", "glinerpii"]
+py-modules = ["maskly", "glinerpii", "desktop"]
