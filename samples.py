@@ -12,24 +12,25 @@ fk = Faker("en_IN")
 Faker.seed(7)
 random.seed(7)
 OUT = Path(__file__).parent / "samples"
-FONT = "/System/Library/Fonts/Helvetica.ttc"
+FONT = next(f for f in ["/System/Library/Fonts/Helvetica.ttc", "C:/Windows/Fonts/arial.ttf",
+                         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"] if Path(f).exists())
 
 
-def card():
+def card(rng=random):
     while True:
-        n = "4" + "".join(random.choices("0123456789", k=15))
+        n = "4" + "".join(rng.choices("0123456789", k=15))
         if luhn(n):
             return " ".join(n[i:i + 4] for i in range(0, 16, 4))
 
 
-def aadhaar():
-    n = str(random.randint(2, 9)) + "".join(random.choices("0123456789", k=10))
+def aadhaar(rng=random):
+    n = str(rng.randint(2, 9)) + "".join(rng.choices("0123456789", k=10))
     n += verhoeff_digit(n)
     return f"{n[:4]} {n[4:8]} {n[8:]}"
 
 
-def pan():
-    return "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=5)) + str(random.randint(1000, 9999)) + random.choice("ABCDEFGHJK")
+def pan(rng=random):
+    return "".join(rng.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=5)) + str(rng.randint(1000, 9999)) + rng.choice("ABCDEFGHJK")
 
 
 def render(name, rows, title):
