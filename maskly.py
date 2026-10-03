@@ -21,6 +21,10 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 CLOUD_MODEL = os.environ.get("MASKLY_CLOUD_MODEL", "gemma-4-26b-a4b-it")
 # Cloud Gemma 4 always "thinks" first (~40 s per screenshot); its thinking cannot be turned off.
 CLOUD_TIMEOUT = float(os.environ.get("MASKLY_CLOUD_TIMEOUT", "90"))
+# "auto" (default): GLiNER-PII when its model is fetched, else Gemma. "gliner": an 83 MB span model, about a second
+# per screenshot on CPU (see glinerpii.py). "gemma": local Gemma 4 via Ollama, 35-85 s on a laptop GPU.
+DETECTOR = os.environ.get("MASKLY_DETECTOR", "auto")
+GLINER_THRESHOLD = float(os.environ.get("MASKLY_GLINER_THRESHOLD", "0.3"))
 
 # ---------------------------------------------------------------- OCR
 
@@ -139,6 +143,20 @@ def row_left(words, lines, n):
     return best[1] if best else None
 
 
+LABEL_WORDS = set("""name full first last customer requester contact holder account email e-mail mail address phone
+mobile tel telephone number no no. # order id ticket invoice reference ref status state priority severity host server
+database db user username login ip client last device mac api key token access password temp date birth dob of by
+created updated verified amount total refund product plan item channel source build version app commit request
+national tax ssn aadhaar pan ifsc iban card payment bank billing shipping delivery city country zip pin code
+postcode kyc / - member since""".split())
+
+
+def is_label(text):
+    """Reads like a field name: ends in ":", "#" or "no.", or is made only of common field-name words."""
+    t = text.strip().lower()
+    return bool(re.search(r"(:|#|\bno\.?)$", t)) or all(w in LABEL_WORDS for w in t.rstrip(":").split())
+
+
 def rules(words, lines):
     """Run regexes on full line text (catches numbers split by spaces), map hits back to word ids."""
     hits = {}
@@ -243,7 +261,7 @@ def gemma(img, words, skip):
 # ---------------------------------------------------------------- pipeline
 
 
-def detect(img, use_gemma=True):
+def detect(img, use_model=True):
     t = time.perf_counter()
     words, lines = ocr(img)
     hits = rules(words, lines)
@@ -251,11 +269,15 @@ def detect(img, use_gemma=True):
               "reason": "Pattern match", "confidence": 1.0} for i, c in hits.items()]
     partial, error, backend = False, None, "off"
     t_ocr = time.perf_counter()
-    if use_gemma:
+    if use_model:
         try:
-            findings, backend = gemma(img, words, hits)
+            import glinerpii
+            if DETECTOR == "gliner" or (DETECTOR == "auto" and glinerpii.available()):
+                findings, backend = glinerpii.findings(words, lines, hits, GLINER_THRESHOLD), "gliner"
+            else:
+                findings, backend = gemma(img, words, hits)
             for f in findings:
-                boxes += [{"box": words[i]["box"], "text": words[i]["text"], "source": "gemma",
+                boxes += [{"box": words[i]["box"], "text": words[i]["text"], "source": "gliner" if backend == "gliner" else "gemma",
                            "category": f["category"], "reason": f["reason"],
                            "confidence": round(float(f["confidence"]), 2)} for i in f["word_ids"]]
         except Exception as e:  # fail closed: rules still apply, UI shows partial-scan banner
@@ -263,7 +285,7 @@ def detect(img, use_gemma=True):
     return {"width": img.width, "height": img.height, "boxes": boxes, "partial": partial, "error": error,
             "backend": backend,
             "words": len(words), "ms": {"ocr_rules": round((t_ocr - t) * 1000),
-                                        "gemma": round((time.perf_counter() - t_ocr) * 1000)}}
+                                        "model": round((time.perf_counter() - t_ocr) * 1000)}}
 
 
 def redact(img, boxes):
@@ -281,6 +303,7 @@ def cli(argv=None):
     """`maskly in.png` -> in_redacted.png + a JSON report with counts only (never the redacted text).
     Exit 0 = full scan, 2 = partial scan (rules only; a human must check), 1 = error."""
     import argparse
+    import sys
     from collections import Counter
     from pathlib import Path
 
@@ -288,12 +311,20 @@ def cli(argv=None):
 
     global GEMINI_KEY
     ap = argparse.ArgumentParser(prog="maskly", description="Black out personal data in a screenshot, on this machine.")
-    ap.add_argument("image", help="PNG or JPG to redact")
+    ap.add_argument("image", nargs="?", help="PNG or JPG to redact")
+    ap.add_argument("--fetch-model", action="store_true",
+                    help="download the GLiNER-PII model (83 MB, pinned + sha256-checked) to ~/.cache/maskly, then exit")
     ap.add_argument("-o", "--output", help="output PNG (default: <name>_redacted.png next to the input)")
-    ap.add_argument("--rules-only", action="store_true", help="skip Gemma; pattern rules only (fast, misses names/addresses)")
+    ap.add_argument("--rules-only", action="store_true", help="skip the model; pattern rules only (misses names/addresses)")
     ap.add_argument("--allow-cloud", action="store_true",
                     help="allow the Gemini API fallback when local Ollama fails (free tier: fake data only)")
     a = ap.parse_args(argv)
+    if a.fetch_model:
+        import glinerpii
+        glinerpii.fetch(lambda m: print(m, file=sys.stderr))
+        return 0
+    if not a.image:
+        ap.error("an image is required (or --fetch-model)")
     if not a.allow_cloud:
         GEMINI_KEY = ""  # safe default for agents: nothing leaves the machine
     src = Path(a.image)
@@ -305,13 +336,13 @@ def cli(argv=None):
     except Exception as e:
         print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}))
         return 1
-    r = detect(img, use_gemma=not a.rules_only)
+    r = detect(img, use_model=not a.rules_only)
     redact(img, r["boxes"]).save(out, "PNG")
     partial = r["partial"] or a.rules_only
     print(json.dumps({
         "ok": True, "output": str(out), "boxes": len(r["boxes"]),
         "boxes_by_category": dict(Counter(b["category"] for b in r["boxes"])),
-        "gemma": r["backend"], "partial": partial,
+        "detector": r["backend"], "partial": partial,
         "warning": "Partial scan: only pattern rules ran. Names, addresses and IDs may be visible. "
                    "Ask the user to check the image before sharing." if partial else None}, indent=1))
     return 2 if partial else 0

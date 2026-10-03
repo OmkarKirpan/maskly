@@ -3,7 +3,7 @@
   --set nemotron  NVIDIA Nemotron-PII (CC BY 4.0) test text rendered as documents: a stress test. Get the data:
                   curl -L -o data/nemotron-pii-test.parquet \\
                   https://huggingface.co/datasets/nvidia/Nemotron-PII/resolve/main/data/test-00000-of-00001.parquet
-Run: uv run python bench.py [--set ui] [--split tune] [--n 60] [--detectors rules,gemma] [--gemma-n 6]"""
+Run: uv run python bench.py [--set ui] [--split tune] [--n 60] [--detectors rules,gliner,gemma] [--gemma-n 6]"""
 import argparse
 import ast
 import random
@@ -80,13 +80,35 @@ def render(row):
 
 
 def score(results):
-    tot = caught = drawn = good = leaks = 0
+    """-> recall, precision, leaky docs, docs, caught, total, recall on the items OCR read correctly."""
+    tot = caught = drawn = good = leaks = rtot = rcaught = 0
     for labels, boxes in results:
         need = [l for l in labels if l.get("sensitive") or l.get("label") in SENSITIVE]
         miss = [l for l in need if not covered(l["box"], boxes)]
         tot += len(need); caught += len(need) - len(miss); leaks += bool(miss)
+        rtot += sum(l.get("readable", True) for l in need)
+        rcaught += sum(l.get("readable", True) and l not in miss for l in need)
         drawn += len(boxes); good += sum(any(overlaps(b, l["box"]) for l in labels) for b in boxes)
-    return caught / max(tot, 1), good / max(drawn, 1), leaks, len(results), caught, tot
+    return caught / max(tot, 1), good / max(drawn, 1), leaks, len(results), caught, tot, rcaught / max(rtot, 1)
+
+
+def readable(label, words):
+    """Did OCR read this item exactly? The detectors only see OCR text, so they cannot box what OCR misread."""
+    x0, y0, x1, y1 = label["box"]
+    got = "".join(w["text"] for w in words if w["box"][0] < x1 and x0 < w["box"][2] and w["box"][1] < y1 and y0 < w["box"][3])
+    return label["text"].replace(" ", "").lower() in got.replace(" ", "").lower()
+
+
+_ocr = maskly.ocr
+_last = {}
+
+
+def _recording_ocr(img):
+    _last["words"], lines = _ocr(img)
+    return _last["words"], lines
+
+
+maskly.ocr = _recording_ocr  # remember what OCR read so each label can be marked readable or not
 
 
 def nemotron_docs(n, seed, save):
@@ -116,7 +138,8 @@ def ui_docs(n, split, save):
 
 
 def detect(det, img):
-    return maskly.detect(img, use_gemma=det != "rules")
+    maskly.DETECTOR = det if det in ("gliner", "gemma") else "auto"
+    return maskly.detect(img, use_model=det != "rules")
 
 
 def main():
@@ -143,13 +166,15 @@ def main():
             ms.append((time.perf_counter() - t) * 1000)
             if r["partial"]:
                 print(f"  {det} partial: {r['error']}")
+            labels = [{**l, "readable": readable(l, _last["words"])} for l in labels]
             res[g].append((labels, [b["box"] for b in r["boxes"]]))
         print(f"\n{det.upper()}  (median {sorted(ms)[len(ms) // 2]:.0f} ms/doc incl. OCR)")
         for g in groups + ["ALL"]:
             rows = [x for k in groups for x in res[k]] if g == "ALL" else res[g]
             if rows:
-                rc, pr, lk, n, c, t = score(rows)
-                print(f"  {g:12} recall {c}/{t} = {rc:.0%} · precision {pr:.0%} · leaky {lk}/{n} = {lk / n:.0%}")
+                rc, pr, lk, n, c, t, rr = score(rows)
+                print(f"  {g:12} recall {c}/{t} = {rc:.1%} (on OCR-readable {rr:.1%}) · precision {pr:.1%}"
+                      f" · leaky {lk}/{n} = {lk / n:.0%}")
 
 
 if __name__ == "__main__":

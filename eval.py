@@ -1,4 +1,4 @@
-"""Recall/precision on samples/: rules-only vs rules+Gemma. Run: uv run python eval.py [--no-gemma]"""
+"""Recall/precision on samples/: rules only vs rules + model (GLiNER, or Gemma if GLiNER is not fetched). Run: uv run python eval.py [--no-gemma]"""
 import json
 import sys
 from pathlib import Path
@@ -24,11 +24,11 @@ def overlaps(a, b):
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
-def run(use_gemma):
+def run(use_model):
     tot = caught = drawn = good = leaks = 0
     for png in sorted(Path(__file__).parent.glob("samples/*.png")):
         labels = json.loads(png.with_suffix(".json").read_text())
-        r = maskly.detect(Image.open(png).convert("RGB"), use_gemma=use_gemma)
+        r = maskly.detect(Image.open(png).convert("RGB"), use_model=use_model)
         boxes = [b["box"] for b in r["boxes"]]
         miss = [l["text"] for l in labels if not covered(l["box"], boxes)]
         tot += len(labels); caught += len(labels) - len(miss); leaks += bool(miss)
@@ -42,4 +42,4 @@ def run(use_gemma):
 if __name__ == "__main__":
     print("RULES ONLY"); run(False)
     if "--no-gemma" not in sys.argv:
-        print("RULES + GEMMA"); run(True)
+        print("RULES + MODEL"); run(True)
