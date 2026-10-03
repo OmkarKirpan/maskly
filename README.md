@@ -62,6 +62,17 @@ Gemma returns strict JSON. Any word ID it makes up is thrown away:
 
 Measured on 3 synthetic screenshots (support ticket, KYC review, error log) made with fake [Faker](https://faker.readthedocs.io) data, with `gemma-4-26b-a4b-it`. It is a small test set, so treat it as a first signal. Reproduce it with `uv run python eval.py`.
 
+### Speed
+
+Local Gemma 4 is slow on small GPUs. Measured with `gemma4:e2b` on a laptop GTX 1650 (4 GB), fully on the GPU:
+
+| | Gemma time per screenshot | Recall | Correct boxes (precision) | Screenshots with a leak |
+|---|---|---|---|---|
+| Thinking on (default) | 35–57 s | 15 / 15 (100%) | 69% | 0 of 3 |
+| `MASKLY_THINK=0` | 9–19 s | 14 / 15 (93%) | 45–49% | 1 of 3 |
+
+OCR and rules add 2–6 s. Most of Gemma's time is spent writing its hidden reasoning before the answer, about 700 of 1,000 output tokens. Shrinking the image barely helps, because reading the image takes about 5 s. The default timeout is 90 s so a slow scan can still finish; on a faster GPU you can lower it.
+
 ## Safety by design
 
 - **Fail closed.** If Gemma is missing, slow or fails, the rule boxes still apply. A **partial scan** banner appears, and Copy stays locked until you confirm you checked the image.
@@ -98,7 +109,8 @@ Put settings in a `.env` file and start with `uv run --env-file .env uvicorn app
 |---|---|---|
 | `MASKLY_MODEL` | `gemma4:e2b` | Local Ollama model |
 | `MASKLY_OLLAMA` | `http://localhost:11434` | Ollama server |
-| `MASKLY_TIMEOUT` | `30` | Seconds before a local call counts as failed |
+| `MASKLY_TIMEOUT` | `90` | Seconds before a local call counts as failed |
+| `MASKLY_THINK` | `1` | Set `0` to turn off Gemma's thinking: 2–3× faster, but it misses more |
 | `MASKLY_THRESHOLD` | `0.6` | Minimum Gemma confidence for a box |
 | `GEMINI_API_KEY` | — | Turns on the cloud fallback (optional) |
 | `MASKLY_CLOUD_MODEL` | `gemma-4-26b-a4b-it` | Gemini API model for the fallback |
@@ -149,7 +161,8 @@ make_demo.py       Saves real results for the GitHub Pages demo (demo/)
 
 - [x] OCR + rules + Gemma 4 pipeline, review page, fail-closed path
 - [x] Gemini API fallback with rule-redacted upload
-- [ ] Benchmark local Gemma 4 E2B / E4B against the 5-second target
+- [x] Benchmark local Gemma 4 E2B: 35–57 s per screenshot on a GTX 1650, so the 5-second target is not met (see [Speed](#speed))
+- [ ] Benchmark E4B and faster GPUs; find a way to hit 5 seconds
 - [ ] Face and QR code detection
 - [ ] Team profiles ("external ticket" vs "internal chat") and an allowlist
 - [ ] Local audit log with counts per category, never content
