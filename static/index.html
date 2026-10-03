@@ -4,161 +4,354 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Maskly — Redact Before Send</title>
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
-  :root { --bg:#f6f5f2; --fg:#1b1b1b; --muted:#666; --card:#fff; --line:#ddd;
-          --rules:#d62828; --gemma:#7b2cbf; --manual:#1d70b8; --warn:#fff3cd; --warnfg:#664d03; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#171717; --fg:#eee; --muted:#aaa; --card:#222; --line:#333;
-          --warn:#3a2f05; --warnfg:#ffe08a; } }
-  * { box-sizing:border-box }
-  body { margin:0; font:15px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg) }
-  header { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap }
-  h1 { font-size:20px; margin:0 auto 0 0 }
-  button, label.btn { font:inherit; padding:7px 14px; border-radius:8px; border:1px solid var(--line);
-          background:var(--card); color:var(--fg); cursor:pointer }
-  button.primary { background:var(--fg); color:var(--bg); border-color:var(--fg) }
-  button:disabled { opacity:.4; cursor:not-allowed }
-  main { padding:16px }
-  #drop { border:2px dashed var(--line); border-radius:12px; padding:64px 16px; text-align:center; color:var(--muted) }
-  #drop.over { border-color:var(--manual) }
-  #banner { display:none; background:var(--warn); color:var(--warnfg); padding:10px 14px; border-radius:8px; margin-bottom:12px }
-  #wrap { position:relative; display:none }
-  canvas { max-width:100%; height:auto; display:block; border-radius:6px; cursor:crosshair; box-shadow:0 1px 4px #0003 }
-  #tip { position:fixed; pointer-events:none; background:#000d; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; display:none }
-  #status { color:var(--muted); font-size:12px; margin:8px 0 }
-  .legend span { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 4px 0 10px }
-  kbd { font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 4px }
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench (app shell) · theme: Cobalt · tone: utilitarian
+ * enrichment: none (the screenshot is the content) · nav: bordered tool bar · footer: none (app page)
+ * anchor hue: 256 (cobalt) · fonts: Space Grotesk + Inter + JetBrains Mono (self-hosted, offline)
+ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--color-paper); color: var(--color-ink-2);
+       font: 400 var(--text-sm)/1.5 var(--font-body); -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; color: inherit; }
+.mono { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.06em; text-transform: uppercase; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+kbd { font: 500 var(--text-2xs)/1 var(--font-mono); padding: var(--space-3xs); border: var(--rule-1) solid var(--color-rule-2);
+      border-bottom-width: 2px; border-radius: 4px; color: var(--color-ink-2); background: var(--color-paper); }
+
+/* ── Tool bar ─────────────────────────────────────────── */
+.bar { height: var(--bar-h); display: flex; align-items: center; gap: var(--space-sm);
+       padding: 0 var(--space-md); border-bottom: var(--rule-1) solid var(--color-rule); background: var(--color-paper); }
+.mark { display: flex; align-items: baseline; gap: var(--space-xs); margin-right: auto; min-width: 0; }
+.mark b { font: 600 var(--text-lg)/1 var(--font-display); letter-spacing: -0.02em; color: var(--color-ink); }
+.mark span { color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { display: inline-flex; align-items: center; gap: var(--space-3xs); padding: var(--space-3xs) var(--space-2xs); border: var(--rule-1) solid var(--color-rule-2);
+        border-radius: var(--radius-control); color: var(--color-ink-2); white-space: nowrap; }
+.chip::before { content: ""; width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--color-src-rules); }
+.chip[data-backend="cloud"]::before { background: var(--color-src-manual); }
+.chip[data-backend="failed"]::before { background: var(--color-danger); }
+
+/* ── Buttons: 8 states ────────────────────────────────── */
+.btn { display: inline-flex; align-items: center; height: 2.25rem; padding: 0 var(--space-sm);
+       border: var(--rule-1) solid var(--color-rule-2); border-radius: var(--radius-control); background: var(--color-paper);
+       color: var(--color-ink); font-weight: 500; white-space: nowrap; cursor: pointer;
+       transition: border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out); }
+.btn:hover { border-color: var(--color-ink-2); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible, .row input:focus-visible, .ack input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; border-color: var(--color-rule-2); }
+.btn--primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); }
+.btn--primary:hover { background: var(--color-ink); border-color: var(--color-ink); }
+.btn--primary:disabled { background: var(--color-accent); border-color: var(--color-accent); }
+.btn[data-state="loading"] { cursor: progress; }
+.btn[data-state="success"] { background: var(--color-ink); border-color: var(--color-ink); }
+.btn[data-state="error"] { background: var(--color-danger); border-color: var(--color-danger); }
+.btn[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+
+/* ── Workspace ────────────────────────────────────────── */
+.app { display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w); height: calc(100dvh - var(--bar-h)); }
+.stage { position: relative; background: var(--color-graphite); overflow: auto; display: grid; place-items: center;
+         padding: var(--space-lg); min-width: 0; }
+.stage canvas { display: block; max-width: 100%; max-height: calc(100dvh - var(--bar-h) - 2 * var(--space-lg));
+                width: auto; height: auto; border-radius: 2px; cursor: crosshair; touch-action: none; }
+.stage canvas[hidden] { display: none; }
+
+/* scanning line: transform only */
+.scan { position: absolute; inset: 0 0 auto 0; height: 2px; overflow: hidden; }
+.scan::after { content: ""; position: absolute; inset: 0; width: 30%; background: var(--color-accent);
+               transform: translateX(-100%); animation: sweep 1.1s var(--ease-in-out) infinite; }
+@keyframes sweep { to { transform: translateX(340%); } }
+
+/* empty state */
+.drop { width: min(36rem, 100%); padding: var(--space-xl) var(--space-lg); border: var(--rule-1) dashed var(--color-graphite-2);
+        border-radius: var(--radius-card); color: var(--color-on-graphite-2); text-align: left;
+        transition: border-color var(--dur-short) var(--ease-out); }
+.drop.is-over { border-color: var(--color-accent); }
+.drop h1 { margin: 0 0 var(--space-xs); font: 600 var(--text-display)/1.08 var(--font-display); letter-spacing: -0.025em;
+           color: var(--color-on-graphite); overflow-wrap: anywhere; min-width: 0; }
+.drop p { margin: 0 0 var(--space-md); max-width: 46ch; }
+.drop kbd { background: var(--color-graphite-2); color: var(--color-on-graphite); border-color: var(--color-graphite-2); }
+.steps { display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-md); margin: 0 0 var(--space-lg); padding: 0; list-style: none;
+         color: var(--color-on-graphite-2); }
+.steps li::before { content: counter(list-item) " "; color: var(--color-accent); }
+.drop .btn { background: var(--color-graphite-2); border-color: var(--color-graphite-2); color: var(--color-on-graphite); }
+.drop .btn:hover { border-color: var(--color-on-graphite-2); }
+
+/* ── Findings panel ───────────────────────────────────── */
+.panel { border-left: var(--rule-1) solid var(--color-rule); display: flex; flex-direction: column; min-height: 0; background: var(--color-paper); }
+.panel header { padding: var(--space-md) var(--space-md) var(--space-sm); border-bottom: var(--rule-1) solid var(--color-rule); }
+.panel h2 { margin: 0 0 var(--space-3xs); font: 600 var(--text-lg)/1.2 var(--font-display); letter-spacing: -0.015em; color: var(--color-ink); }
+.meta { color: var(--color-muted); }
+.counts { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin-top: var(--space-xs); }
+.counts[hidden] { display: none; }
+.counts span { display: inline-flex; align-items: center; gap: var(--space-3xs); }
+.sw { width: 0.625rem; height: 0.625rem; border-radius: 2px; flex: none; }
+.sw--rules { background: var(--color-src-rules); } .sw--gemma { background: var(--color-src-gemma); } .sw--manual { background: var(--color-src-manual); }
+
+.alert { margin: var(--space-sm) var(--space-md) 0; padding: var(--space-xs) var(--space-sm); border: var(--rule-1) solid var(--color-warn-rule);
+         border-radius: var(--radius-control); background: var(--color-warn-bg); color: var(--color-warn-ink); }
+.alert[hidden] { display: none; }
+.alert strong { color: var(--color-ink); font-weight: 600; }
+.alert p { margin: 0 0 var(--space-2xs); }
+.alert .ack { display: flex; gap: var(--space-2xs); align-items: center; font-weight: 500; color: var(--color-ink); cursor: pointer; }
+.alert .ack input { accent-color: var(--color-accent); width: 1rem; height: 1rem; }
+.alert small { display: block; margin-top: var(--space-2xs); font-family: var(--font-mono); font-size: var(--text-2xs); overflow-wrap: anywhere; }
+.alert--info { border-color: var(--color-rule-2); background: var(--color-paper-2); color: var(--color-ink-2); }
+
+.list { flex: 1; overflow: auto; margin: 0; padding: var(--space-2xs) 0; list-style: none; }
+.row label { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: var(--space-xs); align-items: start;
+             padding: var(--space-xs) var(--space-md); cursor: pointer; border-left: 2px solid transparent;
+             transition: background-color var(--dur-short) var(--ease-out); }
+.row label:hover, .row.is-hot label { background: var(--color-paper-2); border-left-color: var(--color-accent); }
+.row input { margin: var(--space-3xs) 0 0; accent-color: var(--color-accent); width: 1rem; height: 1rem; }
+.row .sw { margin-top: var(--space-3xs); }
+.row .txt { color: var(--color-ink); font-weight: 500; overflow-wrap: anywhere; }
+.row .why { display: block; color: var(--color-muted); margin-top: var(--space-3xs); }
+.row.is-off .txt { color: var(--color-muted); text-decoration: line-through; }
+.empty { padding: var(--space-md); color: var(--color-muted); }
+.panel footer { padding: var(--space-sm) var(--space-md); border-top: var(--rule-1) solid var(--color-rule); color: var(--color-muted);
+                display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-sm); }
+
+#tip { position: fixed; z-index: 10; pointer-events: none; max-width: 22rem; padding: var(--space-2xs) var(--space-xs);
+       border-radius: var(--radius-control); background: var(--color-ink); color: var(--color-paper); font-size: var(--text-sm); }
+#tip[hidden] { display: none; }
+
+/* ── Mobile: stage over panel ─────────────────────────── */
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .stage { min-height: 60dvh; padding: var(--space-sm); }
+  .stage canvas { max-height: none; }
+  .panel { border-left: 0; border-top: var(--rule-1) solid var(--color-rule); }
+  .mark span, .hide-sm { display: none; }
+  .bar { height: auto; flex-wrap: wrap; padding: var(--space-xs) var(--space-sm); gap: var(--space-2xs); }
+  .mark { flex-basis: 100%; }
+  .btn { padding: 0 var(--space-xs); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 1ms !important; }
+  .scan::after { animation: none; transform: none; width: 100%; opacity: 0.6; }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>Maskly <small style="font-weight:400;color:var(--muted)">redacts on this device · assist, not guarantee</small></h1>
-  <label class="btn">Open… <input id="file" type="file" accept="image/png,image/jpeg" hidden></label>
-  <button id="preview" disabled>Preview <kbd>P</kbd></button>
-  <button id="save" disabled>Save PNG</button>
-  <button id="copy" class="primary" disabled>Copy redacted <kbd>⌘↵</kbd></button>
+<header class="bar">
+  <div class="mark"><b>Maskly</b><span class="mono">redact before send</span></div>
+  <span class="chip mono hide-sm" id="chip" data-backend="local">On this device</span>
+  <label class="btn" tabindex="0" id="openBtn">Open<input id="file" type="file" accept="image/png,image/jpeg" class="sr" tabindex="-1"></label>
+  <button class="btn" id="preview" aria-pressed="false" disabled>Preview</button>
+  <button class="btn" id="save" disabled>Save<span class="hide-sm">&nbsp;PNG</span></button>
+  <button class="btn btn--primary" id="copy" disabled>Copy<span class="hide-sm">&nbsp;redacted</span></button>
 </header>
-<main>
-  <div id="banner" role="alert">
-    <b>Partial scan.</b> The AI check failed, so only pattern rules ran. Review every part by hand.
-    <label><input type="checkbox" id="ack"> I checked the image myself</label>
-    <div id="err" style="font-size:12px;opacity:.8"></div>
-  </div>
-  <div id="drop">Paste a screenshot (<kbd>⌘V</kbd>), drop it here, or click <b>Open…</b></div>
-  <div id="status"></div>
-  <div class="legend" id="legend" style="display:none;font-size:12px;margin-bottom:8px">
-    <span style="background:var(--rules)"></span>Rule <span style="background:var(--gemma)"></span>Gemma
-    <span style="background:var(--manual)"></span>Manual · click a box to turn it off/on · drag to draw a box
-  </div>
-  <div id="wrap"><canvas id="c"></canvas></div>
-</main>
-<div id="tip"></div>
-<script>
-const $ = id => document.getElementById(id);
-const c = $('c'), ctx = c.getContext('2d'), PAD = 4;
-let img = null, name = 'screenshot', boxes = [], partial = false, preview = false, drag = null;
-const color = s => getComputedStyle(document.documentElement).getPropertyValue('--' + s);
 
+<main class="app">
+  <section class="stage" id="stage" aria-label="Screenshot">
+    <div class="scan" id="scan" hidden></div>
+    <div class="drop" id="drop">
+      <h1>Paste a screenshot. Copy it back clean.</h1>
+      <p>OCR and pattern rules run on this machine, and Gemma 4 reads the context. You check every box before anything leaves the page.</p>
+      <ol class="steps mono"><li>Paste</li><li>Review</li><li>Copy</li></ol>
+      <button class="btn" id="dropOpen" type="button">Choose an image</button>
+      <span class="mono">&nbsp; or press <kbd>⌘</kbd> <kbd>V</kbd></span>
+    </div>
+    <canvas id="c" hidden aria-label="Screenshot with redaction boxes. Drag to add a box."></canvas>
+  </section>
+
+  <aside class="panel" aria-label="Findings">
+    <header>
+      <h2>Findings <span id="total" class="meta"></span></h2>
+      <div class="meta mono" id="meta">No screenshot yet</div>
+      <div class="counts mono" id="counts" hidden>
+        <span><i class="sw sw--rules"></i>Rule <b id="nRules">0</b></span>
+        <span><i class="sw sw--gemma"></i>Gemma <b id="nGemma">0</b></span>
+        <span><i class="sw sw--manual"></i>Manual <b id="nManual">0</b></span>
+      </div>
+    </header>
+    <div class="alert" id="partial" role="alert" hidden>
+      <p><strong>Partial scan.</strong> Gemma did not answer, so only pattern rules ran. Names, addresses and IDs may be missed.</p>
+      <label class="ack"><input type="checkbox" id="ack"> I checked the whole image myself</label>
+      <small id="err"></small>
+    </div>
+    <div class="alert alert--info" id="cloud" hidden>
+      <p><strong>Cloud Gemma used.</strong> Local Gemma was not available. Rule matches were blacked out before the image was sent.</p>
+    </div>
+    <ul class="list" id="list"><li class="empty">Boxes appear here with the reason for each one.</li></ul>
+    <footer class="mono"><span>Click a row or box to turn it off</span><span>Drag on the image to add one</span><span><kbd>P</kbd> preview</span><span><kbd>⌘</kbd><kbd>↵</kbd> copy</span></footer>
+  </aside>
+</main>
+<div id="tip" hidden></div>
+<div class="sr" aria-live="polite" id="live"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const c = $('#c'), ctx = c.getContext('2d'), PAD = 4;
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const alpha = (col, a) => col.replace(/\)$/, ` / ${a})`);
+let img = null, name = 'screenshot', boxes = [], groups = [], partial = false, preview = false, drag = null, hot = -1;
+
+// ── load + scan ────────────────────────────────────────
 async function load(blob) {
-  if (!blob || !/image\/(png|jpeg)/.test(blob.type)) return alert('Please use a PNG or JPG image.');
+  if (!blob || !/image\/(png|jpeg)/.test(blob.type)) return say('Use a PNG or JPG image.');
   name = (blob.name || 'screenshot').replace(/\.\w+$/, '');
   img = await createImageBitmap(blob);
-  c.width = img.width; c.height = img.height; boxes = []; preview = false;
-  $('drop').style.display = 'none'; $('wrap').style.display = 'block'; $('legend').style.display = 'block';
-  $('banner').style.display = 'none'; $('status').textContent = 'Scanning on this device…'; setReady(false); draw();
+  c.width = img.width; c.height = img.height; boxes = []; groups = []; preview = false; hot = -1;
+  $('#drop').hidden = true; c.hidden = false; $('#scan').hidden = false;
+  $('#partial').hidden = $('#cloud').hidden = true; $('#counts').hidden = true;
+  $('#meta').textContent = 'Scanning on this device…'; $('#total').textContent = '';
+  $('#list').innerHTML = '<li class="empty">Reading text and looking for personal data…</li>';
+  setReady(false); draw();
   const t = performance.now();
+  let backend = 'failed';
   try {
     const r = await fetch('/detect', { method: 'POST', body: blob });
     if (!r.ok) throw new Error(await r.text());
     const d = await r.json();
     boxes = d.boxes.map(b => ({ ...b, on: true }));
-    partial = d.partial;
-    $('err').textContent = d.error || '';
-    $('status').textContent = `${boxes.length} boxes · ${d.words} words read · ${((performance.now() - t) / 1000).toFixed(1)} s ` +
-      `(OCR+rules ${d.ms.ocr_rules} ms, Gemma ${d.ms.gemma} ms, ${d.backend})` +
-      (d.backend === 'cloud' ? ' · ⚠ Local Gemma unavailable: used cloud Gemma. Rule matches were blacked out before sending.' : '');
+    partial = d.partial; backend = d.backend;
+    $('#err').textContent = d.error || '';
+    $('#meta').textContent = `${d.words} words · ${((performance.now() - t) / 1000).toFixed(1)} s · Gemma ${backend}`;
   } catch (e) {
-    partial = true; $('err').textContent = String(e); $('status').textContent = 'Scan failed. Draw boxes by hand.';
+    partial = true; $('#err').textContent = String(e).slice(0, 200);
+    $('#meta').textContent = 'Scan failed · draw boxes by hand';
   }
-  $('banner').style.display = partial ? 'block' : 'none'; $('ack').checked = false;
-  setReady(true); draw();
+  $('#scan').hidden = true;
+  $('#chip').dataset.backend = backend;
+  $('#chip').textContent = backend === 'cloud' ? 'Cloud fallback' : backend === 'failed' ? 'Rules only' : 'On this device';
+  $('#partial').hidden = !partial; $('#cloud').hidden = backend !== 'cloud'; $('#ack').checked = false;
+  regroup(); setReady(true); draw();
+  say(`${groups.length} findings. Review, then copy.`);
 }
+
+// ── group word boxes into findings (same detector + category, same line, adjacent) ──
+const keyOf = b => `${b.source}|${b.category}|${b.source === 'gemma' ? b.reason : ''}`;
+function regroup() {
+  const order = boxes.map((_, i) => i).sort((a, b) => boxes[a].box[1] - boxes[b].box[1] || boxes[a].box[0] - boxes[b].box[0]);
+  groups = [];
+  for (const i of order) {
+    const b = boxes[i], [x0, y0, x1, y1] = b.box, h = y1 - y0, cy = (y0 + y1) / 2;
+    const g = b.source === 'manual' ? null : groups.find(g => g.key === keyOf(b) && Math.abs(g.cy - cy) < h / 2 && x0 - g.x1 < h * 1.5);
+    if (g) { g.ids.push(i); g.text += ' ' + (b.text || ''); g.x1 = Math.max(g.x1, x1); }
+    else groups.push({ key: keyOf(b), ids: [i], text: b.text || 'Drawn box', cy, x1, source: b.source, category: b.category, reason: b.reason, confidence: b.confidence });
+  }
+  groups.forEach((g, gi) => g.ids.forEach(i => boxes[i].g = gi));
+  renderList();
+}
+
+function renderList() {
+  const ul = $('#list'); ul.textContent = '';
+  if (!groups.length) { ul.innerHTML = '<li class="empty">Nothing found. Drag on the image to cover anything private.</li>'; }
+  groups.forEach((g, gi) => {
+    const on = boxes[g.ids[0]].on;
+    const li = document.createElement('li'); li.className = 'row' + (on ? '' : ' is-off') + (gi === hot ? ' is-hot' : '');
+    const label = document.createElement('label');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = on;
+    cb.onchange = () => toggle(gi, cb.checked);
+    const sw = document.createElement('i'); sw.className = `sw sw--${g.source}`;
+    const body = document.createElement('span');
+    const txt = document.createElement('span'); txt.className = 'txt'; txt.textContent = g.text;   // OCR text: never innerHTML
+    const why = document.createElement('span'); why.className = 'why mono';
+    why.textContent = g.source === 'manual' ? 'Manual' : `${g.category.replace(/_/g, ' ')} · ${g.source === 'gemma' ? `${g.reason} · ${Math.round(g.confidence * 100)}%` : 'pattern'}`;
+    body.append(txt, why); label.append(cb, sw, body); li.append(label);
+    li.onmouseenter = () => { hot = gi; draw(); }; li.onmouseleave = () => { hot = -1; draw(); };
+    ul.append(li);
+  });
+  const n = s => groups.filter(g => g.source === s).length;
+  $('#nRules').textContent = n('rules'); $('#nGemma').textContent = n('gemma'); $('#nManual').textContent = n('manual');
+  $('#counts').hidden = !img; $('#total').textContent = img ? groups.length : '';
+}
+
+function toggle(gi, on) { groups[gi].ids.forEach(i => boxes[i].on = on); renderList(); draw(); }
 
 function setReady(ok) {
-  for (const id of ['preview', 'save', 'copy']) $(id).disabled = !ok || (id !== 'preview' && partial && !$('ack').checked);
+  $('#preview').disabled = !ok;
+  for (const id of ['#save', '#copy']) $(id).disabled = !ok || (partial && !$('#ack').checked);
 }
-$('ack').onchange = () => setReady(true);
+$('#ack').onchange = () => setReady(true);
 
+// ── drawing ────────────────────────────────────────────
 // FR-12 says 4 px; OCR boxes hug the glyphs, so pad grows with text height (20%) to cover edge pixels.
 function pad(b) {
   const [x0, y0, x1, y1] = b.box, p = b.source === 'manual' ? PAD : Math.max(PAD, (y1 - y0) * 0.2);
   return [x0 - p, y0 - p, x1 - x0 + 2 * p, y1 - y0 + 2 * p];
 }
-
 function draw() {
   if (!img) return;
   ctx.drawImage(img, 0, 0);
+  const lw = Math.max(2, img.width / 700);
   for (const b of boxes) {
-    const r = pad(b);
-    if (preview) { if (b.on) { ctx.fillStyle = '#000'; ctx.fillRect(...r); } continue; }
-    ctx.lineWidth = Math.max(2, img.width / 800);
-    ctx.strokeStyle = color(b.source); ctx.setLineDash(b.on ? [] : [6, 4]);
-    if (b.on) { ctx.fillStyle = color(b.source) + '55'; ctx.fillRect(...r); }
+    const r = pad(b), col = tok('--color-src-' + b.source);
+    if (preview) { if (b.on) { ctx.fillStyle = tok('--color-redact'); ctx.fillRect(...r); } continue; }
+    ctx.lineWidth = b.g === hot ? lw * 2 : lw; ctx.strokeStyle = col; ctx.setLineDash(b.on ? [] : [lw * 3, lw * 2]);
+    if (b.on) { ctx.fillStyle = alpha(col, b.g === hot ? 0.45 : 0.28); ctx.fillRect(...r); }
     ctx.strokeRect(...r);
   }
   ctx.setLineDash([]);
-  if (drag && drag.moved) { ctx.strokeStyle = color('manual'); ctx.strokeRect(drag.x, drag.y, drag.x2 - drag.x, drag.y2 - drag.y); }
+  if (drag && drag.moved) { ctx.lineWidth = lw; ctx.strokeStyle = tok('--color-src-manual'); ctx.strokeRect(drag.x, drag.y, drag.x2 - drag.x, drag.y2 - drag.y); }
 }
 
-function pt(e) { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; }
-function hit(x, y) {
-  for (let i = boxes.length - 1; i >= 0; i--) { const [bx, by, w, h] = pad(boxes[i]); if (x >= bx && x <= bx + w && y >= by && y <= by + h) return boxes[i]; }
-}
-
-c.onmousedown = e => { const [x, y] = pt(e); drag = { x, y, x2: x, y2: y, moved: false }; };
-c.onmousemove = e => {
+// ── pointer: click toggles, drag draws ─────────────────
+const pt = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+const hit = (x, y) => { for (let i = boxes.length - 1; i >= 0; i--) { const [bx, by, w, h] = pad(boxes[i]); if (x >= bx && x <= bx + w && y >= by && y <= by + h) return boxes[i]; } };
+c.onpointerdown = e => { const [x, y] = pt(e); drag = { x, y, x2: x, y2: y, moved: false }; c.setPointerCapture(e.pointerId); };
+c.onpointermove = e => {
   const [x, y] = pt(e);
   if (drag) { drag.x2 = x; drag.y2 = y; drag.moved ||= Math.hypot(x - drag.x, y - drag.y) > 6; draw(); return; }
-  const b = hit(x, y), tip = $('tip');
+  const b = hit(x, y), tip = $('#tip'), was = hot;
+  hot = b && !preview ? b.g : -1;
+  if (was !== hot) { draw(); renderList(); }
   if (b && !preview) {
-    tip.textContent = `${b.category} · ${b.source}${b.source === 'gemma' ? ' ' + b.confidence : ''} — ${b.reason}`;
-    tip.style.left = e.clientX + 12 + 'px'; tip.style.top = e.clientY + 12 + 'px'; tip.style.display = 'block';
-  } else tip.style.display = 'none';
+    tip.textContent = b.source === 'manual' ? 'Manual box' : `${b.category.replace(/_/g, ' ')} · ${b.source === 'gemma' ? b.reason : 'pattern match'}`;
+    tip.style.left = e.clientX + 14 + 'px'; tip.style.top = e.clientY + 14 + 'px'; tip.hidden = false;
+  } else tip.hidden = true;
 };
-window.onmouseup = e => {
+c.onpointerup = () => {
   if (!drag) return;
   if (drag.moved) {
     const x0 = Math.min(drag.x, drag.x2), y0 = Math.min(drag.y, drag.y2), x1 = Math.max(drag.x, drag.x2), y1 = Math.max(drag.y, drag.y2);
     boxes.push({ box: [x0 + PAD, y0 + PAD, x1 - PAD, y1 - PAD], source: 'manual', category: 'manual', reason: 'Drawn by you', on: true });
-  } else if (e.target === c) { const b = hit(drag.x, drag.y); if (b) b.on = !b.on; }
+    regroup(); say('Box added.');
+  } else { const b = hit(drag.x, drag.y); if (b) toggle(b.g, !b.on); }
   drag = null; draw();
 };
-c.onmouseleave = () => $('tip').style.display = 'none';
+c.onpointerleave = () => { $('#tip').hidden = true; if (hot !== -1 && !drag) { hot = -1; draw(); renderList(); } };
 
-function render() {  // flatten: solid fill drawn into new pixels, re-encoded PNG carries no EXIF
+// ── output: solid fill, re-encoded PNG (no EXIF) ───────
+function render() {
   const o = document.createElement('canvas'); o.width = img.width; o.height = img.height;
-  const x = o.getContext('2d'); x.drawImage(img, 0, 0); x.fillStyle = '#000';
+  const x = o.getContext('2d'); x.drawImage(img, 0, 0); x.fillStyle = tok('--color-redact');
   for (const b of boxes) if (b.on) x.fillRect(...pad(b));
   return new Promise(res => o.toBlob(res, 'image/png'));
 }
+function flash(btn, state, label) {
+  const old = btn.dataset.label ||= btn.innerHTML;
+  btn.dataset.state = state; btn.textContent = label;
+  if (state !== 'loading') setTimeout(() => { btn.dataset.state = ''; btn.innerHTML = old; }, 1600);
+}
 async function copy() {
-  if ($('copy').disabled) return;
-  try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': render() })]); $('status').textContent = 'Redacted image copied. Paste it into your ticket.'; }
-  catch (e) { alert('Copy failed: ' + e + '. Use Save PNG.'); }
+  const btn = $('#copy'); if (btn.disabled) return;
+  flash(btn, 'loading', 'Copying…');
+  try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': render() })]); flash(btn, 'success', 'Copied'); say('Redacted image copied.'); }
+  catch (e) { flash(btn, 'error', 'Copy failed'); say('Copy failed. Use Save PNG.'); }
 }
 async function save() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(await render());
-  a.download = name + '_redacted.png'; a.click(); URL.revokeObjectURL(a.href);
+  a.download = name + '_redacted.png'; a.click(); URL.revokeObjectURL(a.href); say('Saved ' + a.download);
 }
-$('copy').onclick = copy; $('save').onclick = save;
-$('preview').onclick = () => { preview = !preview; draw(); };
+function togglePreview() { if ($('#preview').disabled) return; preview = !preview; $('#preview').setAttribute('aria-pressed', preview); draw(); }
+const say = m => { $('#live').textContent = m; };
 
-$('file').onchange = e => load(e.target.files[0]);
+$('#copy').onclick = copy; $('#save').onclick = save; $('#preview').onclick = togglePreview;
+$('#dropOpen').onclick = () => $('#file').click();
+$('#openBtn').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#file').click(); } };
+$('#file').onchange = e => { load(e.target.files[0]); e.target.value = ''; };
 document.onpaste = e => { const f = [...e.clipboardData.files][0]; if (f) load(f); };
-document.ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
-document.ondrop = e => { e.preventDefault(); $('drop').classList.remove('over'); load(e.dataTransfer.files[0]); };
+document.ondragover = e => { e.preventDefault(); $('#drop').classList.add('is-over'); };
+document.ondragleave = e => { if (!e.relatedTarget) $('#drop').classList.remove('is-over'); };
+document.ondrop = e => { e.preventDefault(); $('#drop').classList.remove('is-over'); load(e.dataTransfer.files[0]); };
 document.onkeydown = e => {
+  if (e.target.matches?.('input')) return;
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) copy();
-  else if (e.key.toLowerCase() === 'p' && img && !e.metaKey && !e.ctrlKey) $('preview').click();
+  else if (e.key.toLowerCase() === 'p' && !e.metaKey && !e.ctrlKey) togglePreview();
 };
 </script>
 </body>

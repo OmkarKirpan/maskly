@@ -1,0 +1,59 @@
+/* Hallmark · genre: modern-minimal · theme: Cobalt · tokens */
+@font-face { font-family: "Space Grotesk"; src: url("fonts/space-grotesk.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("fonts/inter.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
+
+:root {
+  /* paper + ink — cool, never #fff / #000 */
+  --color-paper:      oklch(98.5% 0.004 250);
+  --color-paper-2:    oklch(96.4% 0.006 252);
+  --color-ink:        oklch(24% 0.02 258);
+  --color-ink-2:      oklch(34% 0.018 257);
+  --color-muted:      oklch(48% 0.016 257);
+  --color-rule:       oklch(90% 0.008 255);
+  --color-rule-2:     oklch(83% 0.01 256);
+
+  /* the one signal */
+  --color-accent:      oklch(58% 0.20 256);
+  --color-accent-ink:  oklch(98.5% 0.004 250);
+  --color-accent-soft: oklch(58% 0.20 256 / 0.10);
+  --color-focus:       oklch(58% 0.20 256);
+
+  /* the one dark beat: the stage */
+  --color-graphite:    oklch(22% 0.016 260);
+  --color-graphite-2:  oklch(30% 0.016 260);
+  --color-on-graphite: oklch(90% 0.01 255);
+  --color-on-graphite-2: oklch(70% 0.014 257);
+
+  /* detector colours (data, not decoration) */
+  --color-src-rules:  oklch(58% 0.20 256);
+  --color-src-gemma:  oklch(56% 0.19 305);
+  --color-src-manual: oklch(70% 0.15 70);
+  --color-redact:     oklch(0% 0 0);
+
+  /* status */
+  --color-warn-bg:   oklch(96.5% 0.035 85);
+  --color-warn-rule: oklch(84% 0.08 80);
+  --color-warn-ink:  oklch(38% 0.07 65);
+  --color-danger:    oklch(52% 0.19 25);
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --space-3xs: 0.25rem; --space-2xs: 0.5rem; --space-xs: 0.75rem;
+  --space-sm:  1rem;    --space-md:  1.5rem; --space-lg: 2rem;
+  --space-xl:  3rem;    --space-2xl: 4.5rem;
+
+  --text-2xs: 0.6875rem; --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem;
+  --text-lg: 1.25rem;    --text-xl: 1.75rem; --text-display: clamp(1.75rem, 2.4vw + 0.75rem, 2.75rem);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 160ms; --dur-med: 240ms;
+
+  --rule-1: 1px;
+  --radius-control: 6px; --radius-card: 10px;
+  --bar-h: 3.5rem; --panel-w: 22rem;
+}

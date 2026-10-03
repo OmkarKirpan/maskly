@@ -124,6 +124,7 @@ uv run python maskly.py         # rules self-check
 maskly.py          OCR, rules, Gemma (local + cloud), detect()
 app.py             FastAPI server: GET / and POST /detect
 static/index.html  Review page: paste, review, copy (no build step)
+static/tokens.css  Design tokens; fonts are bundled in static/fonts so it works offline
 samples.py         Fake screenshots with labelled sensitive items
 eval.py            Recall / precision, rules only vs rules + Gemma
 ```

@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "space grotesk",
+        "createdAt": "2026-10-03T08:38:21.479Z",
+        "reason": "User confirmed Space Grotesk is intentional (Cobalt theme, bundled offline)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-03T08:38:21.532Z",
+        "reason": "User confirmed Inter is intentional (Cobalt theme, bundled offline)"
+      }
+    ]
+  }
+}
