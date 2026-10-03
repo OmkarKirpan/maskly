@@ -22,10 +22,10 @@ def index():
 
 
 @app.post("/detect")
-async def detect(request: Request, gemma: bool = True):
+async def detect(request: Request, model: bool = True):
     # Raw image body, read into memory only: no multipart temp files on disk.
     try:
         img = Image.open(io.BytesIO(await request.body())).convert("RGB")
     except Exception:
         raise HTTPException(400, "Send a PNG or JPG image as the request body")
-    return await run_in_threadpool(maskly.detect, img, gemma)
+    return await run_in_threadpool(maskly.detect, img, model)

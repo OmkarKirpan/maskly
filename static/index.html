@@ -177,7 +177,7 @@ kbd { font: 500 var(--text-2xs)/1 var(--font-mono); padding: var(--space-3xs); b
       <div class="meta mono" id="meta">No screenshot yet</div>
       <div class="counts mono" id="counts" hidden>
         <span><i class="sw sw--rules"></i>Rule <b id="nRules">0</b></span>
-        <span><i class="sw sw--gemma"></i>Gemma <b id="nGemma">0</b></span>
+        <span><i class="sw sw--gemma"></i>AI model <b id="nGemma">0</b></span>
         <span><i class="sw sw--manual"></i>Manual <b id="nManual">0</b></span>
       </div>
     </header>
@@ -225,8 +225,8 @@ async function load(blob) {
     boxes = d.boxes.map(b => ({ ...b, on: true }));
     partial = d.partial; backend = d.backend;
     $('#err').textContent = d.error || '';
-    const secs = DEMO ? (d.ms.ocr_rules + d.ms.gemma) / 1000 : (performance.now() - t) / 1000;  // demo: time of the saved real run
-    $('#meta').textContent = `${d.words} words · ${secs.toFixed(1)} s${DEMO ? ' (saved run)' : ''} · Gemma ${backend}`;
+    const secs = DEMO ? (d.ms.ocr_rules + (d.ms.model ?? d.ms.gemma)) / 1000 : (performance.now() - t) / 1000;  // demo: time of the saved real run
+    $('#meta').textContent = `${d.words} words · ${secs.toFixed(1)} s${DEMO ? ' (saved run)' : ''} · model: ${backend}`;
   } catch (e) {
     partial = true; $('#err').textContent = String(e).slice(0, 200);
     $('#meta').textContent = 'Scan failed · draw boxes by hand';
@@ -240,7 +240,8 @@ async function load(blob) {
 }
 
 // ── group word boxes into findings (same detector + category, same line, adjacent) ──
-const keyOf = b => `${b.source}|${b.category}|${b.source === 'gemma' ? b.reason : ''}`;
+const isModel = s => s !== 'rules' && s !== 'manual';
+const keyOf = b => `${b.source}|${b.category}|${isModel(b.source) ? b.reason : ''}`;
 function regroup() {
   const order = boxes.map((_, i) => i).sort((a, b) => boxes[a].box[1] - boxes[b].box[1] || boxes[a].box[0] - boxes[b].box[0]);
   groups = [];
@@ -267,13 +268,13 @@ function renderList() {
     const body = document.createElement('span');
     const txt = document.createElement('span'); txt.className = 'txt'; txt.textContent = g.text;   // OCR text: never innerHTML
     const why = document.createElement('span'); why.className = 'why mono';
-    why.textContent = g.source === 'manual' ? 'Manual' : `${g.category.replace(/_/g, ' ')} · ${g.source === 'gemma' ? `${g.reason} · ${Math.round(g.confidence * 100)}%` : 'pattern'}`;
+    why.textContent = g.source === 'manual' ? 'Manual' : `${g.category.replace(/_/g, ' ')} · ${isModel(g.source) ? `${g.reason} · ${Math.round(g.confidence * 100)}%` : 'pattern'}`;
     body.append(txt, why); label.append(cb, sw, body); li.append(label);
     li.onmouseenter = () => { hot = gi; draw(); }; li.onmouseleave = () => { hot = -1; draw(); };
     ul.append(li);
   });
   const n = s => groups.filter(g => g.source === s).length;
-  $('#nRules').textContent = n('rules'); $('#nGemma').textContent = n('gemma'); $('#nManual').textContent = n('manual');
+  $('#nRules').textContent = n('rules'); $('#nGemma').textContent = groups.filter(g => isModel(g.source)).length; $('#nManual').textContent = n('manual');
   $('#counts').hidden = !img; $('#total').textContent = img ? groups.length : '';
 }
 
@@ -317,7 +318,7 @@ c.onpointermove = e => {
   hot = b && !preview ? b.g : -1;
   if (was !== hot) { draw(); renderList(); }
   if (b && !preview) {
-    tip.textContent = b.source === 'manual' ? 'Manual box' : `${b.category.replace(/_/g, ' ')} · ${b.source === 'gemma' ? b.reason : 'pattern match'}`;
+    tip.textContent = b.source === 'manual' ? 'Manual box' : `${b.category.replace(/_/g, ' ')} · ${isModel(b.source) ? b.reason : 'pattern match'}`;
     tip.style.left = e.clientX + 14 + 'px'; tip.style.top = e.clientY + 14 + 'px'; tip.hidden = false;
   } else tip.hidden = true;
 };

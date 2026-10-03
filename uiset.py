@@ -65,6 +65,10 @@ class Values:
         return self.r.choice(vals) if vals and self.r.random() < 0.6 else fallback()
 
     def get(self, cat):
+        return " ".join(self._get(cat).split())  # Faker addresses can span lines; a UI field shows one
+
+
+    def _get(self, cat):
         r, f = self.r, self.f
         return {
             "person_name": lambda: f"{self._p('first_name', f.first_name)} {self._p('last_name', f.last_name)}",
