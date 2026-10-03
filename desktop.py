@@ -49,7 +49,7 @@ def serve() -> str:
 def parse_hotkey(spec: str) -> tuple[int, int]:
     *mods, key = spec.lower().split("+")
     if len(key) != 1 or not key.isalnum() or not set(mods) <= MODS.keys():
-        raise SystemExit(f"MASKLY_HOTKEY={spec!r}: use ctrl/alt/shift/win plus one letter or digit, like ctrl+alt+m")
+        raise SystemExit(f"MASKLY_HOTKEY={spec!r}: use ctrl/alt/shift/win plus one letter or digit, like ctrl+alt+r")
     return sum(MODS[m] for m in set(mods)) | MOD_NOREPEAT, ord(key.upper())
 
 
@@ -87,7 +87,7 @@ def listen(spec: str, mods: int, vk: int, window: webview.Window) -> None:
 
 
 def main() -> None:
-    spec = os.environ.get("MASKLY_HOTKEY", "ctrl+alt+m")
+    spec = os.environ.get("MASKLY_HOTKEY", "ctrl+alt+r")
     mods, vk = parse_hotkey(spec)
     window = webview.create_window("Maskly", serve(), js_api=Api(), width=1280, height=820, min_size=(720, 520))
     hotkey = threading.Thread(target=listen, args=(spec, mods, vk, window), daemon=True)
